@@ -329,4 +329,39 @@
         pinchInfo.box.style.fontSize = newFontSize + 'px';
       }, { passive: false });
 
-      box.addEventListen
+      box.addEventListener('touchend', (e) => {
+        if (pinchInfo && e.touches.length < 2) {
+          pinchInfo = null;
+        }
+      });
+
+      box.addEventListener('touchcancel', () => {
+        pinchInfo = null;
+      });
+
+      // اختيار المربع للكتابة/التنسيق
+      box.addEventListener('click', (e) => {
+        setActiveBox(box);
+        e.stopPropagation();
+      });
+
+      return box;
+    }
+
+    // ========= تحديد المربع النشط =========
+    function setActiveBox(box) {
+      if (activeBox && activeBox !== box) {
+        activeBox.classList.remove('active');
+      }
+      activeBox = box;
+      if (activeBox) {
+        activeBox.classList.add('active');
+
+        const style = window.getComputedStyle(activeBox);
+        fontFamilySelect.value = style.fontFamily.replace(/"/g,'').split(',')[0] || 'Arial';
+        fontSizeInput.value = parseInt(style.fontSize) || 22;
+
+        const rgb = style.color.match(/\d+/g);
+        if (rgb && rgb.length >= 3) {
+          const toHex = (n) => parseInt(n).toString(16).padStart(2, '0');
+          fontColorInput.value = '#' + toHex(rgb[0]) + toHex(rgb[1]];
