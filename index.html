@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>محرر نصوص على صورة a1.jpeg</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <style>
     body {
       margin: 0;
@@ -81,11 +82,12 @@
     #image-container {
       position: relative;
       display: inline-block;
+      touch-action: none; /* يساعد في منع سحب الصفحة أثناء سحب المربعات */
     }
 
     #base-image {
       display: block;
-      max-width: 90vw;
+      max-width: 95vw;
       height: auto;
     }
 
@@ -115,6 +117,7 @@
       color: #666;
       margin-bottom: 5px;
       text-align: center;
+      padding: 0 10px;
     }
   </style>
 </head>
@@ -151,8 +154,8 @@
   </div>
 
   <div class="hint">
-    في الوضع العادي يمكنك الكتابة داخل المربعات (اضغط في آخر النص لتكمل الكتابة).  
-    إذا أردت تحريك المربع فعّل "وضع التحريك" ثم اسحبه بالفأرة، وبعدها ألغِ التفعيل للعودة للكتابة.
+    من الجوال أو الكمبيوتر:  
+    اكتب داخل المربعات مباشرة. إذا أردت تحريك المربع فعّل "وضع التحريك" ثم اسحبه بإصبعك (أو الماوس)، وبعدها ألغِ التفعيل للعودة للكتابة.
   </div>
 
   <div id="editor-wrapper">
@@ -174,7 +177,7 @@
     const moveModeCheckbox = document.getElementById('move-mode');
 
     let activeBox = null;
-    let dragInfo = null;
+    let dragInfo = null; // { box, offsetX, offsetY }
 
     img.addEventListener('load', () => {
       container.style.width = img.clientWidth + 'px';
@@ -198,9 +201,9 @@
       container.appendChild(box);
       setActiveBox(box);
 
-      // للسحب فقط عندما يكون وضع التحريك مفعّل
+      // سحب بالماوس عندما يكون وضع التحريك مفعّل
       box.addEventListener('mousedown', (e) => {
-        if (!moveModeCheckbox.checked) return; // في وضع الكتابة لا نسحب
+        if (!moveModeCheckbox.checked) return;
         if (e.button !== 0) return;
         e.preventDefault();
 
@@ -214,7 +217,24 @@
         box.contentEditable = 'false';
       });
 
-      // اختيار المربع والكتابة عادي
+      // سحب باللمس عندما يكون وضع التحريك مفعّل
+      box.addEventListener('touchstart', (e) => {
+        if (!moveModeCheckbox.checked) return;
+        const touch = e.touches[0];
+        if (!touch) return;
+        e.preventDefault();
+
+        setActiveBox(box);
+        const rect = box.getBoundingClientRect();
+        dragInfo = {
+          box: box,
+          offsetX: touch.clientX - rect.left,
+          offsetY: touch.clientY - rect.top
+        };
+        box.contentEditable = 'false';
+      }, { passive: false });
+
+      // اختيار المربع (كتابة عادية في الوضع العادي)
       box.addEventListener('click', (e) => {
         setActiveBox(box);
         e.stopPropagation();
@@ -248,7 +268,7 @@
       }
     }
 
-    // ========= سحب المربعات =========
+    // ========= سحب بالماوس =========
     document.addEventListener('mousemove', (e) => {
       if (!dragInfo) return;
       const { box, offsetX, offsetY } = dragInfo;
@@ -268,6 +288,36 @@
     });
 
     document.addEventListener('mouseup', () => {
+      if (dragInfo && dragInfo.box) {
+        dragInfo.box.contentEditable = 'true';
+      }
+      dragInfo = null;
+    });
+
+    // ========= سحب باللمس =========
+    document.addEventListener('touchmove', (e) => {
+      if (!dragInfo) return;
+      const touch = e.touches[0];
+      if (!touch) return;
+      e.preventDefault(); // منع سحب الصفحة أثناء التحريك
+
+      const { box, offsetX, offsetY } = dragInfo;
+      const containerRect = container.getBoundingClientRect();
+
+      let newLeft = touch.clientX - containerRect.left - offsetX;
+      let newTop = touch.clientY - containerRect.top - offsetY;
+
+      const maxLeft = containerRect.width - box.offsetWidth;
+      const maxTop = containerRect.height - box.offsetHeight;
+
+      newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+      newTop = Math.max(0, Math.min(newTop, maxTop));
+
+      box.style.left = newLeft + 'px';
+      box.style.top = newTop + 'px';
+    }, { passive: false });
+
+    document.addEventListener('touchend', () => {
       if (dragInfo && dragInfo.box) {
         dragInfo.box.contentEditable = 'true';
       }
@@ -319,7 +369,7 @@
       boldBtn.classList.toggle('active', !isBold);
     });
 
-    // ========= تصدير الصورة مع تحسين موضع النص =========
+    // ========= تصدير الصورة =========
     exportBtn.addEventListener('click', () => {
       if (!img.complete) {
         alert('انتظر حتى تكتمل تحميل الصورة.');
@@ -352,7 +402,6 @@
       boxes.forEach((box) => {
         const style = window.getComputedStyle(box);
 
-        // الموضع الحقيقي للمربع داخل الحاوية
         const offsetLeft = box.offsetLeft;
         const offsetTop = box.offsetTop;
 
