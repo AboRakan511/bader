@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>محرر نصوص على صورة a1.jpeg</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, Arial, sans-serif;
+      background: #f3f3f3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    h1 {
+      margin-top: 20px;
+      margin-bottom: 10px;
+      font-size: 20px;
+      text-align: center;
+    }
+
+    .toolbar {
+      margin-bottom: 10px;
+      padding: 10px 15px;
+      background: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .toolbar label {
+      margin-inline-end: 4px;
+    }
+
+    .toolbar select,
+    .toolbar input[type="number"],
+    .toolbar input[type="color"],
+    .toolbar button {
+      padding: 4px 6px;
+      font-size: 13px;
+    }
+
+    .toolbar button {
+      cursor: pointer;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #fafafa;
+    }
+
+    .toolbar button.primary {
+      background: #2d8cf0;
+      color: #fff;
+      border-color: #2d8cf0;
+    }
+
+    #editor-wrapper {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 10px 0 30px;
+    }
+
+    #image-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    #base-image {
+      display: block;
+      max-width: 90vw;
+      height: auto;
+    }
+
+    .text-box {
+      position: absolute;
+      min-width: 80px;
+      min-height: 30px;
+      padding: 4px 6px;
+      border: 1px dashed rgba(0,0,0,0.3);
+      border-radius: 4px;
+      background: transparent;
+      color: #000;
+      font-size: 18px;
+      cursor: move;
+      user-select: none;
+      white-space: pre-wrap;
+      outline: none;
+    }
+
+    .text-box[contenteditable="true"] {
+      cursor: text;
+      user-select: text;
+    }
+
+    .text-box.active {
+      border-color: #2d8cf0;
+      box-shadow: 0 0 0 1px rgba(45,140,240,0.4);
+    }
+
+    .hint {
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 5px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>محرر نصوص على صورة a1.jpeg</h1>
+
+  <!-- أضفنا id="toolbar" عشان نميّز شريط الأدوات -->
+  <div class="toolbar" id="toolbar">
+    <button id="add-text" class="primary" onclick="createTextBox()">+ إضافة نص</button>
+    <button id="delete-text">🗑 حذف النص المحدد</button>
+    <button id="export-image">⬇ تصدير الصورة</button>
+
+    <span>|</span>
+
+    <label for="font-family">الخط:</label>
+    <select id="font-family">
+      <option value="Arial">Arial</option>
+      <option value="Tahoma">Tahoma</option>
+      <option value="Courier New">Courier New</option>
+      <option value="Times New Roman">Times New Roman</option>
+    </select>
+
+    <label for="font-size">الحجم:</label>
+    <input id="font-size" type="number" value="22" min="8" max="120">
+
+    <label for="font-color">اللون:</label>
+    <input id="font-color" type="color" value="#000000">
+  </div>
+
+  <div class="hint">
+    اضغط "إضافة نص"، ثم اختر المربع، وبعدها غيّر الخط/الحجم/اللون بدون ما يضيع التحديد، ثم "تصدير الصورة".
+  </div>
+
+  <div id="editor-wrapper">
+    <div id="image-container">
+      <img id="base-image" src="a1.jpeg" alt="a1">
+    </div>
+  </div>
+
+  <script>
+    const img = document.getElementById('base-image');
+    const container = document.getElementById('image-container');
+    const toolbar = document.getElementById('toolbar'); // مهم
+    const deleteTextBtn = document.getElementById('delete-text');
+    const exportBtn = document.getElementById('export-image');
+    const fontFamilySelect = document.getElementById('font-family');
+    const fontSizeInput = document.getElementById('font-size');
+    const fontColorInput = document.getElementById('font-color');
+
+    let activeBox = null;
+    let dragInfo = null;
+
+    img.addEventListener('load', () => {
+      container.style.width = img.clientWidth + 'px';
+      container.style.height = img.clientHeight + 'px';
+    });
+
+    // ========= إنشاء مربع نص =========
+    function createTextBox() {
+      const box = document.createElement('div');
+      box.className = 'text-box';
+      box.contentEditable = 'true';
+      box.textContent = 'اكتب هنا';
+
+      box.style.left = '20px';
+      box.style.top = '20px';
+      box.style.fontFamily = fontFamilySelect.value;
+      box.style.fontSize = fontSizeInput.value + 'px';
+      box.style.color = fontColorInput.value;
+
+      container.appendChild(box);
+      setActiveBox(box);
+
+      box.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return;
+        if (e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
+
+        setActiveBox(box);
+        const rect = box.getBoundingClientRect();
+        dragInfo = {
+          box: box,
+          offsetX: e.clientX - rect.left,
+          offsetY: e.clientY - rect.top
+        };
+        box.contentEditable = 'false';
+      });
+
+      box.addEventListener('dblclick', () => {
+        box.contentEditable = 'true';
+        box.focus();
+      });
+
+      box.addEventListener('click', (e) => {
+        setActiveBox(box);
+        e.stopPropagation();
+      });
+
+      return box;
+    }
+
+    // ========= تحديد المربع النشط =========
+    function setActiveBox(box) {
+      if (activeBox && activeBox !== box) {
+        activeBox.classList.remove('active');
+      }
+      activeBox = box;
+      if (activeBox) {
+        activeBox.classList.add('active');
+
+        const style = window.getComputedStyle(activeBox);
+        fontFamilySelect.value = style.fontFamily.replace(/"/g,'').split(',')[0] || 'Arial';
+        fontSizeInput.value = parseInt(style.fontSize) || 22;
+
+        const rgb = style.color.match(/\d+/g);
+        if (rgb && rgb.length >= 3) {
+          const toHex = (n) => parseInt(n).toString(16).padStart(2, '0');
+          fontColorInput.value = '#' + toHex(rgb[0]) + toHex(rgb[1]) + toHex(rgb[2]);
+        }
+      }
+    }
+
+    // ========= سحب المربعات =========
+    document.addEventListener('mousemove', (e) => {
+      if (!dragInfo) return;
+      const { box, offsetX, offsetY } = dragInfo;
+
+      const containerRect = container.getBoundingClientRect();
+      let newLeft = e.clientX - containerRect.left - offsetX;
+      let newTop = e.clientY - containerRect.top - offsetY;
+
+      const maxLeft = containerRect.width - box.offsetWidth;
+      const maxTop = containerRect.height - box.offsetHeight;
+
+      newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+      newTop = Math.max(0, Math.min(newTop, maxTop));
+
+      box.style.left = newLeft + 'px';
+      box.style.top = newTop + 'px';
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (dragInfo && dragInfo.box) {
+        dragInfo.box.contentEditable = 'true';
+      }
+      dragInfo = null;
+    });
+
+    // ========= إلغاء التحديد (مع استثناء التولبار) =========
+    document.addEventListener('click', (e) => {
+      // لو الضغط خارج الصورة وخارج شريط الأدوات فقط
+      if (!container.contains(e.target) && !toolbar.contains(e.target)) {
+        if (activeBox) activeBox.classList.remove('active');
+        activeBox = null;
+      }
+    });
+
+    // ========= حذف النص المحدد =========
+    deleteTextBtn.addEventListener('click', () => {
+      if (activeBox) {
+        activeBox.remove();
+        activeBox = null;
+      }
+    });
+
+    // ========= تغيير خصائص الخط =========
+    fontFamilySelect.addEventListener('change', () => {
+      if (activeBox) {
+        activeBox.style.fontFamily = fontFamilySelect.value;
+      }
+    });
+
+    fontSizeInput.addEventListener('input', () => {
+      if (activeBox) {
+        activeBox.style.fontSize = fontSizeInput.value + 'px';
+      }
+    });
+
+    fontColorInput.addEventListener('input', () => {
+      if (activeBox) {
+        activeBox.style.color = fontColorInput.value;
+      }
+    });
+
+    // ========= تصدير الصورة =========
+    exportBtn.addEventListener('click', () => {
+      if (!img.complete) {
+        alert('انتظر حتى تكتمل تحميل الصورة.');
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      const imgWidth = img.naturalWidth;
+      const imgHeight = img.naturalHeight;
+
+      canvas.width = imgWidth;
+      canvas.height = imgHeight;
+
+      ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
+
+      const containerRect = container.getBoundingClientRect();
+      const scaleX = imgWidth / containerRect.width;
+      const scaleY = imgHeight / containerRect.height;
+
+      const boxes = container.querySelectorAll('.text-box');
+      boxes.forEach((box) => {
+        const boxRect = box.getBoundingClientRect();
+        const style = window.getComputedStyle(box);
+
+        const boxLeft = (boxRect.left - containerRect.left) * scaleX;
+        const boxTop = (boxRect.top - containerRect.top) * scaleY;
+
+        const fontSize = parseFloat(style.fontSize) * scaleX;
+        const fontFamily = style.fontFamily;
+        const color = style.color;
+
+        ctx.font = fontSize + 'px ' + fontFamily;
+        ctx.fillStyle = color;
+        ctx.textBaseline = 'top';
+        ctx.direction = 'rtl';
+
+        const text = box.innerText.replace(/\r/g, '');
+        const lines = text.split('\n');
+        const lineHeight = fontSize * 1.2;
+
+        lines.forEach((line, index) => {
+          const x = boxLeft;
+          const y = boxTop + index * lineHeight;
+          ctx.fillText(line, x, y);
+        });
+      });
+
+      const link = document.createElement('a');
+      link.download = 'a1-with-text.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    });
+  </script>
+</body>
+</html>
