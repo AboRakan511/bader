@@ -65,6 +65,10 @@
       font-weight: bold;
     }
 
+    .toolbar button.bold-btn.active {
+      background: #ddd;
+    }
+
     #editor-wrapper {
       flex: 1;
       display: flex;
@@ -147,8 +151,8 @@
   </div>
 
   <div class="hint">
-    في الوضع العادي يمكنك الكتابة داخل المربعات (اضغط آخر النص وسيذهب المؤشر للنهاية).  
-    لتغيير مكان المربع فعّل خيار "وضع التحريك" ثم اسحب المربع بالفأرة.
+    في الوضع العادي يمكنك الكتابة داخل المربعات (اضغط في آخر النص لتكمل الكتابة).  
+    إذا أردت تحريك المربع فعّل خيار "وضع التحريك" ثم اسحبه بالفأرة، وبعدها ألغِ التفعيل للعودة للكتابة.
   </div>
 
   <div id="editor-wrapper">
@@ -194,9 +198,9 @@
       container.appendChild(box);
       setActiveBox(box);
 
-      // مousedown للسحب فقط إذا وضع التحريك مفعل
+      // للسحب فقط عندما يكون وضع التحريك مفعّل
       box.addEventListener('mousedown', (e) => {
-        if (!moveModeCheckbox.checked) return;      // وضع كتابة فقط
+        if (!moveModeCheckbox.checked) return; // في وضع الكتابة لا نسحب
         if (e.button !== 0) return;
         e.preventDefault();
 
@@ -207,13 +211,12 @@
           offsetX: e.clientX - rect.left,
           offsetY: e.clientY - rect.top
         };
-        box.contentEditable = 'false'; // منع اختيار النص أثناء السحب
+        box.contentEditable = 'false';
       });
 
-      // كلك لاختيار المربع (والكتابة تعمل عادي)
+      // اختيار المربع (الكتابة طبيعية داخل المربع)
       box.addEventListener('click', (e) => {
         setActiveBox(box);
-        // المؤشر تلقائيًا يتجه لمكان الضغط داخل النص
         e.stopPropagation();
       });
 
@@ -271,7 +274,7 @@
       dragInfo = null;
     });
 
-    // إلغاء التحديد إذا الضغط خارج الصورة وخارج التولبار
+    // إلغاء التحديد إذا الضغط خارج الصورة وخارج شريط الأدوات
     document.addEventListener('click', (e) => {
       if (!container.contains(e.target) && !toolbar.contains(e.target)) {
         if (activeBox) activeBox.classList.remove('active');
@@ -306,7 +309,7 @@
       }
     });
 
-    // Bold toggle
+    // تعريض النص
     boldBtn.addEventListener('click', () => {
       if (!activeBox) return;
       const style = window.getComputedStyle(activeBox);
@@ -316,7 +319,7 @@
       boldBtn.classList.toggle('active', !isBold);
     });
 
-    // ========= تصدير الصورة مع تصحيح الإحداثيات =========
+    // ========= تصدير الصورة مع تصحيح موضع النص =========
     exportBtn.addEventListener('click', () => {
       if (!img.complete) {
         alert('انتظر حتى تكتمل تحميل الصورة.');
@@ -332,10 +335,15 @@
       canvas.width = imgWidth;
       canvas.height = imgHeight;
 
+      // رسم الصورة الأساسية
       ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
       const containerWidth = container.clientWidth;
       const containerHeight = container.clientHeight;
+
+      // نجعل طريقة رسم النص مماثلة تقريبًا لطريقة المتصفح (نقطة البداية هي left/top)
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
 
       const boxes = container.querySelectorAll('.text-box');
       boxes.forEach((box) => {
@@ -357,8 +365,6 @@
 
         ctx.font = (isBold ? 'bold ' : '') + fontSize + 'px ' + fontFamily;
         ctx.fillStyle = color;
-        ctx.textBaseline = 'top';
-        ctx.direction = 'rtl';
 
         const text = box.innerText.replace(/\r/g, '');
         const lines = text.split('\n');
