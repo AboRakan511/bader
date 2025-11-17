@@ -82,7 +82,7 @@
     #image-container {
       position: relative;
       display: inline-block;
-      touch-action: none; /* يساعد في منع سحب الصفحة أثناء سحب المربعات */
+      touch-action: none; /* مهم للجوال */
     }
 
     #base-image {
@@ -105,6 +105,7 @@
       user-select: text;
       white-space: pre-wrap;
       outline: none;
+      touch-action: none; /* يمنع سحب الشاشة بدل المربع */
     }
 
     .text-box.active {
@@ -154,8 +155,9 @@
   </div>
 
   <div class="hint">
-    من الجوال أو الكمبيوتر:  
-    اكتب داخل المربعات مباشرة. إذا أردت تحريك المربع فعّل "وضع التحريك" ثم اسحبه بإصبعك (أو الماوس)، وبعدها ألغِ التفعيل للعودة للكتابة.
+    من الجوال أو الكمبيوتر:<br>
+    اكتب داخل المربعات مباشرة.<br>
+    إذا أردت تحريك المربع فعّل "وضع التحريك" ثم اسحبه بإصبعك أو الماوس، وبعدها ألغِ التفعيل للعودة للكتابة.
   </div>
 
   <div id="editor-wrapper">
@@ -177,7 +179,7 @@
     const moveModeCheckbox = document.getElementById('move-mode');
 
     let activeBox = null;
-    let dragInfo = null; // { box, offsetX, offsetY }
+    let dragInfo = null; // { box, pointerId, offsetX, offsetY }
 
     img.addEventListener('load', () => {
       container.style.width = img.clientWidth + 'px';
@@ -201,40 +203,63 @@
       container.appendChild(box);
       setActiveBox(box);
 
-      // سحب بالماوس عندما يكون وضع التحريك مفعّل
-      box.addEventListener('mousedown', (e) => {
-        if (!moveModeCheckbox.checked) return;
-        if (e.button !== 0) return;
-        e.preventDefault();
+      // pointerdown للسحب في وضع التحريك
+      box.addEventListener('pointerdown', (e) => {
+        // لو وضع التحريك غير مفعّل -> لا سحب، فقط اختيار/كتابة
+        if (!moveModeCheckbox.checked) {
+          setActiveBox(box);
+          return;
+        }
 
+        // سحب يبدأ
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+        e.preventDefault();
         setActiveBox(box);
+
         const rect = box.getBoundingClientRect();
         dragInfo = {
           box: box,
+          pointerId: e.pointerId,
           offsetX: e.clientX - rect.left,
           offsetY: e.clientY - rect.top
         };
-        box.contentEditable = 'false';
+
+        box.contentEditable = 'false'; // منع اختيار النص أثناء السحب
+        box.setPointerCapture(e.pointerId);
       });
 
-      // سحب باللمس عندما يكون وضع التحريك مفعّل
-      box.addEventListener('touchstart', (e) => {
-        if (!moveModeCheckbox.checked) return;
-        const touch = e.touches[0];
-        if (!touch) return;
-        e.preventDefault();
+      // pointermove لتحريك المربع
+      box.addEventListener('pointermove', (e) => {
+        if (!dragInfo || dragInfo.pointerId !== e.pointerId) return;
+        const { box, offsetX, offsetY } = dragInfo;
 
-        setActiveBox(box);
-        const rect = box.getBoundingClientRect();
-        dragInfo = {
-          box: box,
-          offsetX: touch.clientX - rect.left,
-          offsetY: touch.clientY - rect.top
-        };
-        box.contentEditable = 'false';
-      }, { passive: false });
+        const containerRect = container.getBoundingClientRect();
+        let newLeft = e.clientX - containerRect.left - offsetX;
+        let newTop = e.clientY - containerRect.top - offsetY;
 
-      // اختيار المربع (كتابة عادية في الوضع العادي)
+        const maxLeft = containerRect.width - box.offsetWidth;
+        const maxTop = containerRect.height - box.offsetHeight;
+
+        newLeft = Math.max(0, Math.min(newLeft, maxLeft));
+        newTop = Math.max(0, Math.min(newTop, maxTop));
+
+        box.style.left = newLeft + 'px';
+        box.style.top = newTop + 'px';
+      });
+
+      // إنهاء السحب
+      const endDrag = (e) => {
+        if (!dragInfo || dragInfo.pointerId !== e.pointerId) return;
+        dragInfo.box.contentEditable = 'true';
+        dragInfo.box.releasePointerCapture(e.pointerId);
+        dragInfo = null;
+      };
+
+      box.addEventListener('pointerup', endDrag);
+      box.addEventListener('pointercancel', endDrag);
+
+      // اختيار المربع عند الضغط (حتى بدون وضع التحريك)
       box.addEventListener('click', (e) => {
         setActiveBox(box);
         e.stopPropagation();
@@ -268,63 +293,7 @@
       }
     }
 
-    // ========= سحب بالماوس =========
-    document.addEventListener('mousemove', (e) => {
-      if (!dragInfo) return;
-      const { box, offsetX, offsetY } = dragInfo;
-
-      const containerRect = container.getBoundingClientRect();
-      let newLeft = e.clientX - containerRect.left - offsetX;
-      let newTop = e.clientY - containerRect.top - offsetY;
-
-      const maxLeft = containerRect.width - box.offsetWidth;
-      const maxTop = containerRect.height - box.offsetHeight;
-
-      newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-      newTop = Math.max(0, Math.min(newTop, maxTop));
-
-      box.style.left = newLeft + 'px';
-      box.style.top = newTop + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (dragInfo && dragInfo.box) {
-        dragInfo.box.contentEditable = 'true';
-      }
-      dragInfo = null;
-    });
-
-    // ========= سحب باللمس =========
-    document.addEventListener('touchmove', (e) => {
-      if (!dragInfo) return;
-      const touch = e.touches[0];
-      if (!touch) return;
-      e.preventDefault(); // منع سحب الصفحة أثناء التحريك
-
-      const { box, offsetX, offsetY } = dragInfo;
-      const containerRect = container.getBoundingClientRect();
-
-      let newLeft = touch.clientX - containerRect.left - offsetX;
-      let newTop = touch.clientY - containerRect.top - offsetY;
-
-      const maxLeft = containerRect.width - box.offsetWidth;
-      const maxTop = containerRect.height - box.offsetHeight;
-
-      newLeft = Math.max(0, Math.min(newLeft, maxLeft));
-      newTop = Math.max(0, Math.min(newTop, maxTop));
-
-      box.style.left = newLeft + 'px';
-      box.style.top = newTop + 'px';
-    }, { passive: false });
-
-    document.addEventListener('touchend', () => {
-      if (dragInfo && dragInfo.box) {
-        dragInfo.box.contentEditable = 'true';
-      }
-      dragInfo = null;
-    });
-
-    // إلغاء التحديد إذا الضغط خارج الصورة وخارج شريط الأدوات
+    // إلغاء التحديد إذا الضغط خارج الصورة وخارج التولبار
     document.addEventListener('click', (e) => {
       if (!container.contains(e.target) && !toolbar.contains(e.target)) {
         if (activeBox) activeBox.classList.remove('active');
@@ -369,7 +338,7 @@
       boldBtn.classList.toggle('active', !isBold);
     });
 
-    // ========= تصدير الصورة =========
+    // ========= تصدير الصورة (نفس النسخة التي تعمل جيدًا) =========
     exportBtn.addEventListener('click', () => {
       if (!img.complete) {
         alert('انتظر حتى تكتمل تحميل الصورة.');
