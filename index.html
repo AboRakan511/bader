@@ -150,14 +150,17 @@
 
     <label>
       <input type="checkbox" id="move-mode">
-      وضع التحريك
+      وضع التحريك / التكبير
     </label>
   </div>
 
   <div class="hint">
-    من الجوال أو الكمبيوتر:<br>
-    اكتب داخل المربعات مباشرة.<br>
-    إذا أردت تحريك المربع فعّل "وضع التحريك" ثم اسحبه بإصبعك أو الماوس، وبعدها ألغِ التفعيل للعودة للكتابة.
+    📱 من الجوال:<br>
+    - اكتب داخل المربعات مباشرة (وضع التحريك غير مفعّل).<br>
+    - فعّل "وضع التحريك / التكبير":<br>
+    &nbsp;&nbsp;• إصبع واحد: سحب المربع.<br>
+    &nbsp;&nbsp;• إصبعان: تكبير/تصغير المربع مع النص (Pinch).<br>
+    - ألغِ التفعيل للعودة للكتابة.
   </div>
 
   <div id="editor-wrapper">
@@ -179,7 +182,12 @@
     const moveModeCheckbox = document.getElementById('move-mode');
 
     let activeBox = null;
+
+    // سحب (Pointer Events)
     let dragInfo = null; // { box, pointerId, offsetX, offsetY }
+
+    // تكبير/تصغير (Pinch)
+    let pinchInfo = null; // { box, startDist, startFontSize, startWidth, startHeight }
 
     img.addEventListener('load', () => {
       container.style.width = img.clientWidth + 'px';
@@ -203,15 +211,16 @@
       container.appendChild(box);
       setActiveBox(box);
 
-      // pointerdown للسحب في وضع التحريك
+      // سحب بالمؤشر (ماوس أو إصبع واحد) عند تفعيل وضع التحريك
       box.addEventListener('pointerdown', (e) => {
-        // لو وضع التحريك غير مفعّل -> لا سحب، فقط اختيار/كتابة
         if (!moveModeCheckbox.checked) {
           setActiveBox(box);
           return;
         }
 
-        // سحب يبدأ
+        // أثناء الـ Pinch لا نسمح بالسحب
+        if (pinchInfo) return;
+
         if (e.button !== 0 && e.pointerType === 'mouse') return;
 
         e.preventDefault();
@@ -225,11 +234,10 @@
           offsetY: e.clientY - rect.top
         };
 
-        box.contentEditable = 'false'; // منع اختيار النص أثناء السحب
+        box.contentEditable = 'false';
         box.setPointerCapture(e.pointerId);
       });
 
-      // pointermove لتحريك المربع
       box.addEventListener('pointermove', (e) => {
         if (!dragInfo || dragInfo.pointerId !== e.pointerId) return;
         const { box, offsetX, offsetY } = dragInfo;
@@ -248,7 +256,6 @@
         box.style.top = newTop + 'px';
       });
 
-      // إنهاء السحب
       const endDrag = (e) => {
         if (!dragInfo || dragInfo.pointerId !== e.pointerId) return;
         dragInfo.box.contentEditable = 'true';
@@ -259,7 +266,69 @@
       box.addEventListener('pointerup', endDrag);
       box.addEventListener('pointercancel', endDrag);
 
-      // اختيار المربع عند الضغط (حتى بدون وضع التحريك)
+      // Pinch: تكبير/تصغير بالمس لمس بإصبعين (Touch Events)
+      box.addEventListener('touchstart', (e) => {
+        if (!moveModeCheckbox.checked) return;
+        if (e.touches.length !== 2) return;
+        e.preventDefault();
+
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+
+        const style = window.getComputedStyle(box);
+        const rect = box.getBoundingClientRect();
+
+        // نثبت عرض وارتفاع المربع قبل التكبير
+        box.style.width = rect.width + 'px';
+        box.style.height = rect.height + 'px';
+
+        pinchInfo = {
+          box,
+          startDist: dist,
+          startFontSize: parseFloat(style.fontSize),
+          startWidth: rect.width,
+          startHeight: rect.height
+        };
+      }, { passive: false });
+
+      box.addEventListener('touchmove', (e) => {
+        if (!pinchInfo) return;
+        if (e.touches.length !== 2) return;
+        e.preventDefault();
+
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+        if (dist <= 0) return;
+
+        const scale = dist / pinchInfo.startDist;
+
+        // حدود معقولة للتكبير/التصغير
+        const minScale = 0.5;
+        const maxScale = 3;
+        const clampedScale = Math.max(minScale, Math.min(maxScale, scale));
+
+        const newWidth = pinchInfo.startWidth * clampedScale;
+        const newHeight = pinchInfo.startHeight * clampedScale;
+        const newFontSize = pinchInfo.startFontSize * clampedScale;
+
+        pinchInfo.box.style.width = newWidth + 'px';
+        pinchInfo.box.style.height = newHeight + 'px';
+        pinchInfo.box.style.fontSize = newFontSize + 'px';
+      }, { passive: false });
+
+      box.addEventListener('touchend', (e) => {
+        if (pinchInfo && e.touches.length < 2) {
+          pinchInfo = null;
+        }
+      });
+
+      box.addEventListener('touchcancel', () => {
+        pinchInfo = null;
+      });
+
+      // اختيار المربع للكتابة/التنسيق
       box.addEventListener('click', (e) => {
         setActiveBox(box);
         e.stopPropagation();
@@ -338,7 +407,7 @@
       boldBtn.classList.toggle('active', !isBold);
     });
 
-    // ========= تصدير الصورة (نفس النسخة التي تعمل جيدًا) =========
+    // ========= تصدير الصورة =========
     exportBtn.addEventListener('click', () => {
       if (!img.complete) {
         alert('انتظر حتى تكتمل تحميل الصورة.');
