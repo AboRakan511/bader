@@ -106,6 +106,7 @@
       white-space: pre-wrap;
       outline: none;
       touch-action: none; /* يمنع سحب الشاشة بدل المربع */
+      text-align: right; /* افتراضيًا يمين لأننا عربي */
     }
 
     .text-box.active {
@@ -146,6 +147,13 @@
     <label for="font-color">اللون:</label>
     <input id="font-color" type="color" value="#000000">
 
+    <label for="text-align">المحاذاة:</label>
+    <select id="text-align">
+      <option value="right" selected>يمين</option>
+      <option value="center">وسط</option>
+      <option value="left">يسار</option>
+    </select>
+
     <button id="bold-toggle" class="bold-btn">B</button>
 
     <label>
@@ -160,6 +168,7 @@
     - فعّل "وضع التحريك / التكبير":<br>
     &nbsp;&nbsp;• إصبع واحد: سحب المربع.<br>
     &nbsp;&nbsp;• إصبعان: تكبير/تصغير المربع مع النص (Pinch).<br>
+    - عدّل المحاذاة (يمين/وسط/يسار) من الشريط.<br>
     - ألغِ التفعيل للعودة للكتابة.
   </div>
 
@@ -178,6 +187,7 @@
     const fontFamilySelect = document.getElementById('font-family');
     const fontSizeInput = document.getElementById('font-size');
     const fontColorInput = document.getElementById('font-color');
+    const textAlignSelect = document.getElementById('text-align');
     const boldBtn = document.getElementById('bold-toggle');
     const moveModeCheckbox = document.getElementById('move-mode');
 
@@ -207,6 +217,7 @@
       box.style.fontSize = fontSizeInput.value + 'px';
       box.style.color = fontColorInput.value;
       box.style.fontWeight = 'normal';
+      box.style.textAlign = textAlignSelect.value; // المحاذاة الافتراضية من التولبار
 
       container.appendChild(box);
       setActiveBox(box);
@@ -266,7 +277,7 @@
       box.addEventListener('pointerup', endDrag);
       box.addEventListener('pointercancel', endDrag);
 
-      // Pinch: تكبير/تصغير بالمس لمس بإصبعين (Touch Events)
+      // Pinch: تكبير/تصغير بالمس بإصبعين (Touch Events)
       box.addEventListener('touchstart', (e) => {
         if (!moveModeCheckbox.checked) return;
         if (e.touches.length !== 2) return;
@@ -318,164 +329,4 @@
         pinchInfo.box.style.fontSize = newFontSize + 'px';
       }, { passive: false });
 
-      box.addEventListener('touchend', (e) => {
-        if (pinchInfo && e.touches.length < 2) {
-          pinchInfo = null;
-        }
-      });
-
-      box.addEventListener('touchcancel', () => {
-        pinchInfo = null;
-      });
-
-      // اختيار المربع للكتابة/التنسيق
-      box.addEventListener('click', (e) => {
-        setActiveBox(box);
-        e.stopPropagation();
-      });
-
-      return box;
-    }
-
-    // ========= تحديد المربع النشط =========
-    function setActiveBox(box) {
-      if (activeBox && activeBox !== box) {
-        activeBox.classList.remove('active');
-      }
-      activeBox = box;
-      if (activeBox) {
-        activeBox.classList.add('active');
-
-        const style = window.getComputedStyle(activeBox);
-        fontFamilySelect.value = style.fontFamily.replace(/"/g,'').split(',')[0] || 'Arial';
-        fontSizeInput.value = parseInt(style.fontSize) || 22;
-
-        const rgb = style.color.match(/\d+/g);
-        if (rgb && rgb.length >= 3) {
-          const toHex = (n) => parseInt(n).toString(16).padStart(2, '0');
-          fontColorInput.value = '#' + toHex(rgb[0]) + toHex(rgb[1]) + toHex(rgb[2]);
-        }
-
-        const fw = style.fontWeight;
-        const isBold = fw === '700' || fw === 'bold';
-        boldBtn.classList.toggle('active', isBold);
-      }
-    }
-
-    // إلغاء التحديد إذا الضغط خارج الصورة وخارج التولبار
-    document.addEventListener('click', (e) => {
-      if (!container.contains(e.target) && !toolbar.contains(e.target)) {
-        if (activeBox) activeBox.classList.remove('active');
-        activeBox = null;
-      }
-    });
-
-    // ========= حذف النص المحدد =========
-    deleteTextBtn.addEventListener('click', () => {
-      if (activeBox) {
-        activeBox.remove();
-        activeBox = null;
-      }
-    });
-
-    // ========= تغيير خصائص الخط =========
-    fontFamilySelect.addEventListener('change', () => {
-      if (activeBox) {
-        activeBox.style.fontFamily = fontFamilySelect.value;
-      }
-    });
-
-    fontSizeInput.addEventListener('input', () => {
-      if (activeBox) {
-        activeBox.style.fontSize = fontSizeInput.value + 'px';
-      }
-    });
-
-    fontColorInput.addEventListener('input', () => {
-      if (activeBox) {
-        activeBox.style.color = fontColorInput.value;
-      }
-    });
-
-    // تعريض النص
-    boldBtn.addEventListener('click', () => {
-      if (!activeBox) return;
-      const style = window.getComputedStyle(activeBox);
-      const fw = style.fontWeight;
-      const isBold = fw === '700' || fw === 'bold';
-      activeBox.style.fontWeight = isBold ? 'normal' : 'bold';
-      boldBtn.classList.toggle('active', !isBold);
-    });
-
-    // ========= تصدير الصورة =========
-    exportBtn.addEventListener('click', () => {
-      if (!img.complete) {
-        alert('انتظر حتى تكتمل تحميل الصورة.');
-        return;
-      }
-
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-
-      const imgWidth = img.naturalWidth;
-      const imgHeight = img.naturalHeight;
-
-      canvas.width = imgWidth;
-      canvas.height = imgHeight;
-
-      // رسم الصورة الأساسية
-      ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
-
-      // حجم الصورة المعروضة على الشاشة
-      const displayWidth = img.clientWidth;
-      const displayHeight = img.clientHeight;
-
-      const scaleX = imgWidth / displayWidth;
-      const scaleY = imgHeight / displayHeight;
-
-      ctx.textBaseline = 'top';
-      ctx.textAlign = 'left';
-
-      const boxes = container.querySelectorAll('.text-box');
-      boxes.forEach((box) => {
-        const style = window.getComputedStyle(box);
-
-        const offsetLeft = box.offsetLeft;
-        const offsetTop = box.offsetTop;
-
-        const paddingLeft = parseFloat(style.paddingLeft) || 0;
-        const paddingTop = parseFloat(style.paddingTop) || 0;
-
-        const boxLeft = (offsetLeft + paddingLeft) * scaleX;
-        const boxTop = (offsetTop + paddingTop) * scaleY;
-
-        const fontSizeScreen = parseFloat(style.fontSize);
-        const fontSize = fontSizeScreen * scaleY;
-
-        const fontFamily = style.fontFamily;
-        const color = style.color;
-        const fw = style.fontWeight;
-        const isBold = fw === '700' || fw === 'bold';
-
-        ctx.font = (isBold ? 'bold ' : '') + fontSize + 'px ' + fontFamily;
-        ctx.fillStyle = color;
-
-        const text = box.innerText.replace(/\r/g, '');
-        const lines = text.split('\n');
-        const lineHeight = fontSize * 1.2;
-
-        lines.forEach((line, index) => {
-          const x = boxLeft;
-          const y = boxTop + index * lineHeight;
-          ctx.fillText(line, x, y);
-        });
-      });
-
-      const link = document.createElement('a');
-      link.download = 'a1-with-text.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    });
-  </script>
-</body>
-</html>
+      box.addEventListen
