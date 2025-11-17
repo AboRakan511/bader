@@ -61,6 +61,10 @@
       border-color: #2d8cf0;
     }
 
+    .toolbar button.bold-btn {
+      font-weight: bold;
+    }
+
     #editor-wrapper {
       flex: 1;
       display: flex;
@@ -91,15 +95,10 @@
       background: transparent;
       color: #000;
       font-size: 18px;
-      cursor: move;
-      user-select: none;
-      white-space: pre-wrap;
-      outline: none;
-    }
-
-    .text-box[contenteditable="true"] {
       cursor: text;
       user-select: text;
+      white-space: pre-wrap;
+      outline: none;
     }
 
     .text-box.active {
@@ -118,7 +117,6 @@
 <body>
   <h1>محرر نصوص على صورة a1.jpeg</h1>
 
-  <!-- أضفنا id="toolbar" عشان نميّز شريط الأدوات -->
   <div class="toolbar" id="toolbar">
     <button id="add-text" class="primary" onclick="createTextBox()">+ إضافة نص</button>
     <button id="delete-text">🗑 حذف النص المحدد</button>
@@ -139,10 +137,18 @@
 
     <label for="font-color">اللون:</label>
     <input id="font-color" type="color" value="#000000">
+
+    <button id="bold-toggle" class="bold-btn">B</button>
+
+    <label>
+      <input type="checkbox" id="move-mode">
+      وضع التحريك
+    </label>
   </div>
 
   <div class="hint">
-    اضغط "إضافة نص"، ثم اختر المربع، وبعدها غيّر الخط/الحجم/اللون بدون ما يضيع التحديد، ثم "تصدير الصورة".
+    في الوضع العادي يمكنك الكتابة داخل المربعات (اضغط آخر النص وسيذهب المؤشر للنهاية).  
+    لتغيير مكان المربع فعّل خيار "وضع التحريك" ثم اسحب المربع بالفأرة.
   </div>
 
   <div id="editor-wrapper">
@@ -154,12 +160,14 @@
   <script>
     const img = document.getElementById('base-image');
     const container = document.getElementById('image-container');
-    const toolbar = document.getElementById('toolbar'); // مهم
+    const toolbar = document.getElementById('toolbar');
     const deleteTextBtn = document.getElementById('delete-text');
     const exportBtn = document.getElementById('export-image');
     const fontFamilySelect = document.getElementById('font-family');
     const fontSizeInput = document.getElementById('font-size');
     const fontColorInput = document.getElementById('font-color');
+    const boldBtn = document.getElementById('bold-toggle');
+    const moveModeCheckbox = document.getElementById('move-mode');
 
     let activeBox = null;
     let dragInfo = null;
@@ -181,13 +189,15 @@
       box.style.fontFamily = fontFamilySelect.value;
       box.style.fontSize = fontSizeInput.value + 'px';
       box.style.color = fontColorInput.value;
+      box.style.fontWeight = 'normal';
 
       container.appendChild(box);
       setActiveBox(box);
 
+      // مousedown للسحب فقط إذا وضع التحريك مفعل
       box.addEventListener('mousedown', (e) => {
+        if (!moveModeCheckbox.checked) return;      // وضع كتابة فقط
         if (e.button !== 0) return;
-        if (e.ctrlKey || e.metaKey) return;
         e.preventDefault();
 
         setActiveBox(box);
@@ -197,16 +207,13 @@
           offsetX: e.clientX - rect.left,
           offsetY: e.clientY - rect.top
         };
-        box.contentEditable = 'false';
+        box.contentEditable = 'false'; // منع اختيار النص أثناء السحب
       });
 
-      box.addEventListener('dblclick', () => {
-        box.contentEditable = 'true';
-        box.focus();
-      });
-
+      // كلك لاختيار المربع (والكتابة تعمل عادي)
       box.addEventListener('click', (e) => {
         setActiveBox(box);
+        // المؤشر تلقائيًا يتجه لمكان الضغط داخل النص
         e.stopPropagation();
       });
 
@@ -231,6 +238,10 @@
           const toHex = (n) => parseInt(n).toString(16).padStart(2, '0');
           fontColorInput.value = '#' + toHex(rgb[0]) + toHex(rgb[1]) + toHex(rgb[2]);
         }
+
+        const fw = style.fontWeight;
+        const isBold = fw === '700' || fw === 'bold';
+        boldBtn.classList.toggle('active', isBold);
       }
     }
 
@@ -260,9 +271,8 @@
       dragInfo = null;
     });
 
-    // ========= إلغاء التحديد (مع استثناء التولبار) =========
+    // إلغاء التحديد إذا الضغط خارج الصورة وخارج التولبار
     document.addEventListener('click', (e) => {
-      // لو الضغط خارج الصورة وخارج شريط الأدوات فقط
       if (!container.contains(e.target) && !toolbar.contains(e.target)) {
         if (activeBox) activeBox.classList.remove('active');
         activeBox = null;
@@ -296,7 +306,17 @@
       }
     });
 
-    // ========= تصدير الصورة =========
+    // Bold toggle
+    boldBtn.addEventListener('click', () => {
+      if (!activeBox) return;
+      const style = window.getComputedStyle(activeBox);
+      const fw = style.fontWeight;
+      const isBold = fw === '700' || fw === 'bold';
+      activeBox.style.fontWeight = isBold ? 'normal' : 'bold';
+      boldBtn.classList.toggle('active', !isBold);
+    });
+
+    // ========= تصدير الصورة مع تصحيح الإحداثيات =========
     exportBtn.addEventListener('click', () => {
       if (!img.complete) {
         alert('انتظر حتى تكتمل تحميل الصورة.');
@@ -314,23 +334,28 @@
 
       ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
-      const containerRect = container.getBoundingClientRect();
-      const scaleX = imgWidth / containerRect.width;
-      const scaleY = imgHeight / containerRect.height;
+      const containerWidth = container.clientWidth;
+      const containerHeight = container.clientHeight;
 
       const boxes = container.querySelectorAll('.text-box');
       boxes.forEach((box) => {
-        const boxRect = box.getBoundingClientRect();
         const style = window.getComputedStyle(box);
 
-        const boxLeft = (boxRect.left - containerRect.left) * scaleX;
-        const boxTop = (boxRect.top - containerRect.top) * scaleY;
+        const leftPx = parseFloat(box.style.left) || 0;
+        const topPx = parseFloat(box.style.top) || 0;
 
-        const fontSize = parseFloat(style.fontSize) * scaleX;
+        const boxLeft = leftPx * (imgWidth / containerWidth);
+        const boxTop = topPx * (imgHeight / containerHeight);
+
+        const fontSizeScreen = parseFloat(style.fontSize);
+        const fontSize = fontSizeScreen * (imgWidth / containerWidth);
+
         const fontFamily = style.fontFamily;
         const color = style.color;
+        const fw = style.fontWeight;
+        const isBold = fw === '700' || fw === 'bold';
 
-        ctx.font = fontSize + 'px ' + fontFamily;
+        ctx.font = (isBold ? 'bold ' : '') + fontSize + 'px ' + fontFamily;
         ctx.fillStyle = color;
         ctx.textBaseline = 'top';
         ctx.direction = 'rtl';
