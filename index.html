@@ -152,7 +152,7 @@
 
   <div class="hint">
     في الوضع العادي يمكنك الكتابة داخل المربعات (اضغط في آخر النص لتكمل الكتابة).  
-    إذا أردت تحريك المربع فعّل خيار "وضع التحريك" ثم اسحبه بالفأرة، وبعدها ألغِ التفعيل للعودة للكتابة.
+    إذا أردت تحريك المربع فعّل "وضع التحريك" ثم اسحبه بالفأرة، وبعدها ألغِ التفعيل للعودة للكتابة.
   </div>
 
   <div id="editor-wrapper">
@@ -214,7 +214,7 @@
         box.contentEditable = 'false';
       });
 
-      // اختيار المربع (الكتابة طبيعية داخل المربع)
+      // اختيار المربع والكتابة عادي
       box.addEventListener('click', (e) => {
         setActiveBox(box);
         e.stopPropagation();
@@ -319,7 +319,7 @@
       boldBtn.classList.toggle('active', !isBold);
     });
 
-    // ========= تصدير الصورة مع تصحيح موضع النص =========
+    // ========= تصدير الصورة مع تحسين موضع النص =========
     exportBtn.addEventListener('click', () => {
       if (!img.complete) {
         alert('انتظر حتى تكتمل تحميل الصورة.');
@@ -338,10 +338,13 @@
       // رسم الصورة الأساسية
       ctx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
-      const containerWidth = container.clientWidth;
-      const containerHeight = container.clientHeight;
+      // حجم الصورة المعروضة على الشاشة
+      const displayWidth = img.clientWidth;
+      const displayHeight = img.clientHeight;
 
-      // نجعل طريقة رسم النص مماثلة تقريبًا لطريقة المتصفح (نقطة البداية هي left/top)
+      const scaleX = imgWidth / displayWidth;
+      const scaleY = imgHeight / displayHeight;
+
       ctx.textBaseline = 'top';
       ctx.textAlign = 'left';
 
@@ -349,14 +352,18 @@
       boxes.forEach((box) => {
         const style = window.getComputedStyle(box);
 
-        const leftPx = parseFloat(box.style.left) || 0;
-        const topPx = parseFloat(box.style.top) || 0;
+        // الموضع الحقيقي للمربع داخل الحاوية
+        const offsetLeft = box.offsetLeft;
+        const offsetTop = box.offsetTop;
 
-        const boxLeft = leftPx * (imgWidth / containerWidth);
-        const boxTop = topPx * (imgHeight / containerHeight);
+        const paddingLeft = parseFloat(style.paddingLeft) || 0;
+        const paddingTop = parseFloat(style.paddingTop) || 0;
+
+        const boxLeft = (offsetLeft + paddingLeft) * scaleX;
+        const boxTop = (offsetTop + paddingTop) * scaleY;
 
         const fontSizeScreen = parseFloat(style.fontSize);
-        const fontSize = fontSizeScreen * (imgWidth / containerWidth);
+        const fontSize = fontSizeScreen * scaleY;
 
         const fontFamily = style.fontFamily;
         const color = style.color;
